@@ -348,6 +348,7 @@ export function createAgentEventHandler({
     if (text && !shouldSuppressSilent) {
       const lastBroadcastLen = chatRunState.deltaLastBroadcastLen.get(clientRunId) ?? 0;
       if (text.length > lastBroadcastLen) {
+        const pendingTail = text.slice(lastBroadcastLen);
         const flushPayload = {
           runId: clientRunId,
           sessionKey,
@@ -355,12 +356,13 @@ export function createAgentEventHandler({
           state: "delta" as const,
           message: {
             role: "assistant",
-            content: [{ type: "text", text }],
+            content: [{ type: "text", text: pendingTail }],
             timestamp: Date.now(),
           },
         };
         broadcast("chat", flushPayload, { dropIfSlow: true });
         nodeSendToSession(sessionKey, "chat", flushPayload);
+        chatRunState.deltaLastBroadcastLen.set(clientRunId, text.length);
       }
     }
     chatRunState.deltaLastBroadcastLen.delete(clientRunId);
