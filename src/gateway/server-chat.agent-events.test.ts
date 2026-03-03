@@ -502,16 +502,7 @@ describe("agent event handler", () => {
 
     emitLifecycleEnd(handler, "run-heartbeat-alert");
 
-    // The flush-before-final path may emit a delta with the pending tail
-    // followed by the authoritative final.  Assert on content, not count.
-    const chatCalls = chatBroadcastCalls(broadcast);
-    expect(chatCalls.length).toBeGreaterThanOrEqual(1);
-
-    const finalCall = chatCalls.find(
-      (c) => (c[1] as { state?: string }).state === "final",
-    );
-    expect(finalCall).toBeDefined();
-    const payload = finalCall![1] as {
+    const payload = expectSingleFinalChatPayload(broadcast) as {
       message?: { content?: Array<{ text?: string }> };
     };
     expect(payload.message?.content?.[0]?.text).toBe(
