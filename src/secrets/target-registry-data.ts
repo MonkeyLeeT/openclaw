@@ -782,7 +782,7 @@ const SECRET_TARGET_REGISTRY: SecretTargetRegistryEntry[] = [
     targetType: "tools.web.search.exa.apiKey",
     configFile: "openclaw.json",
     pathPattern: "tools.web.search.exa.apiKey",
-    secretShape: "secret_input",
+    secretShape: "secret_input", // pragma: allowlist secret
     expectedResolvedValue: "string",
     includeInPlan: true,
     includeInConfigure: true,
