@@ -10,7 +10,7 @@ import {
   type SecretDefaults,
 } from "./runtime-shared.js";
 
-const WEB_SEARCH_PROVIDERS = ["brave", "gemini", "grok", "kimi", "perplexity"] as const;
+const WEB_SEARCH_PROVIDERS = ["brave", "exa", "gemini", "grok", "kimi", "perplexity"] as const;
 const PERPLEXITY_DIRECT_BASE_URL = "https://api.perplexity.ai";
 const DEFAULT_PERPLEXITY_BASE_URL = "https://openrouter.ai/api/v1";
 const PERPLEXITY_KEY_PREFIXES = ["pplx-"];
@@ -84,6 +84,7 @@ function normalizeProvider(value: unknown): WebSearchProvider | undefined {
   const normalized = value.trim().toLowerCase();
   if (
     normalized === "brave" ||
+    normalized === "exa" ||
     normalized === "gemini" ||
     normalized === "grok" ||
     normalized === "kimi" ||
@@ -325,6 +326,9 @@ function envVarsForProvider(provider: WebSearchProvider): string[] {
   }
   if (provider === "grok") {
     return ["XAI_API_KEY"];
+  }
+  if (provider === "exa") {
+    return ["EXA_API_KEY"];
   }
   if (provider === "kimi") {
     return ["KIMI_API_KEY", "MOONSHOT_API_KEY"];

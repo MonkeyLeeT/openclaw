@@ -4,7 +4,7 @@ import * as secretResolve from "./resolve.js";
 import { createResolverContext } from "./runtime-shared.js";
 import { resolveRuntimeWebTools } from "./runtime-web-tools.js";
 
-type ProviderUnderTest = "brave" | "gemini" | "grok" | "kimi" | "perplexity";
+type ProviderUnderTest = "brave" | "exa" | "gemini" | "grok" | "kimi" | "perplexity";
 
 function asConfig(value: unknown): OpenClawConfig {
   return value as OpenClawConfig;
@@ -53,6 +53,9 @@ function readProviderKey(config: OpenClawConfig, provider: ProviderUnderTest): u
   if (provider === "brave") {
     return config.tools?.web?.search?.apiKey;
   }
+  if (provider === "exa") {
+    return config.tools?.web?.search?.exa?.apiKey;
+  }
   if (provider === "gemini") {
     return config.tools?.web?.search?.gemini?.apiKey;
   }
@@ -93,6 +96,11 @@ describe("runtime web tools resolution", () => {
       provider: "brave" as const,
       envRefId: "BRAVE_PROVIDER_REF",
       resolvedKey: "brave-provider-key",
+    },
+    {
+      provider: "exa" as const,
+      envRefId: "EXA_PROVIDER_REF",
+      resolvedKey: "exa-provider-key",
     },
     {
       provider: "gemini" as const,
@@ -145,6 +153,9 @@ describe("runtime web tools resolution", () => {
           web: {
             search: {
               apiKey: { source: "env", provider: "default", id: "BRAVE_REF" },
+              exa: {
+                apiKey: { source: "env", provider: "default", id: "EXA_REF" },
+              },
               gemini: {
                 apiKey: { source: "env", provider: "default", id: "GEMINI_REF" },
               },
@@ -163,6 +174,7 @@ describe("runtime web tools resolution", () => {
       }),
       env: {
         BRAVE_REF: "brave-precedence-key",
+        EXA_REF: "exa-precedence-key",
         GEMINI_REF: "gemini-precedence-key",
         GROK_REF: "grok-precedence-key",
         KIMI_REF: "kimi-precedence-key",
@@ -175,6 +187,7 @@ describe("runtime web tools resolution", () => {
     expect(resolvedConfig.tools?.web?.search?.apiKey).toBe("brave-precedence-key");
     expect(context.warnings).toEqual(
       expect.arrayContaining([
+        expect.objectContaining({ path: "tools.web.search.exa.apiKey" }),
         expect.objectContaining({ path: "tools.web.search.gemini.apiKey" }),
         expect.objectContaining({ path: "tools.web.search.grok.apiKey" }),
         expect.objectContaining({ path: "tools.web.search.kimi.apiKey" }),
