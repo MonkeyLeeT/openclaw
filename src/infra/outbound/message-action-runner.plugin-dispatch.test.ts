@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { jsonResult } from "../../agents/tools/common.js";
-import type { ChannelPlugin } from "../../channels/plugins/types.js";
+import type { ChannelOutboundAdapter, ChannelPlugin } from "../../channels/plugins/types.js";
 import type { OpenClawConfig } from "../../config/config.js";
 import { setActivePluginRegistry } from "../../plugins/runtime.js";
 import { createOutboundTestPlugin, createTestRegistry } from "../../test-utils/channel-plugins.js";
@@ -437,7 +437,8 @@ describe("runMessageAction plugin dispatch", () => {
     });
 
     it("falls back to the channel plugin defaultAccountId for core outbound sends", async () => {
-      const sendWhatsApp = vi.fn(async () => ({
+      const sendWhatsApp: NonNullable<ChannelOutboundAdapter["sendText"]> = vi.fn(async () => ({
+        channel: "whatsapp",
         messageId: "wa-1",
         toJid: "1555@s.whatsapp.net",
       }));
