@@ -753,7 +753,8 @@ export async function runMessageAction(
       accountId = boundAccountIds[0];
     }
   }
-  if (!accountId) {
+  const shouldApplyPluginDefaultAccount = action === "send" || action === "poll";
+  if (!accountId && shouldApplyPluginDefaultAccount) {
     // Keep generic send/poll paths aligned with channel-native actions that
     // already resolve their configured default account internally.
     const pluginDefaultAccountId = resolveOutboundChannelPlugin({ channel, cfg })

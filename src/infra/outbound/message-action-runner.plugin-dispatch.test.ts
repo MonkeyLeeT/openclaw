@@ -600,5 +600,74 @@ describe("runMessageAction plugin dispatch", () => {
         }),
       );
     });
+
+    it("does not force the channel plugin defaultAccountId onto plugin actions", async () => {
+      const reactAction = vi.fn(async () => jsonResult({ ok: true }));
+      const plugin = createOutboundTestPlugin({
+        id: "discord",
+        outbound: {
+          deliveryMode: "direct",
+        },
+      });
+      plugin.actions = {
+        listActions: () => ["react"],
+        supportsAction: ({ action }) => action === "react",
+        handleAction: reactAction,
+      };
+      plugin.config = {
+        ...plugin.config,
+        listAccountIds: () => ["work"],
+        resolveAccount: () => ({ enabled: true }),
+        defaultAccountId: () => "work",
+      };
+      plugin.messaging = {
+        targetResolver: {
+          looksLikeId: () => true,
+        },
+      };
+
+      setActivePluginRegistry(
+        createTestRegistry([
+          {
+            pluginId: "discord",
+            source: "test",
+            plugin,
+          },
+        ]),
+      );
+
+      await runMessageAction({
+        cfg: {
+          channels: {
+            discord: {
+              defaultAccount: "work",
+              accounts: {
+                work: {},
+              },
+            },
+          },
+        } as OpenClawConfig,
+        action: "react",
+        params: {
+          channel: "discord",
+          channelId: "123",
+          messageId: "m1",
+          emoji: "✅",
+        },
+        dryRun: false,
+      });
+
+      const ctx = (reactAction.mock.calls as unknown as Array<[unknown]>)[0]?.[0] as
+        | {
+            accountId?: string | null;
+            params: Record<string, unknown>;
+          }
+        | undefined;
+      if (!ctx) {
+        throw new Error("expected action context");
+      }
+      expect(ctx.accountId).toBeUndefined();
+      expect(ctx.params.accountId).toBeUndefined();
+    });
   });
 });
