@@ -753,10 +753,12 @@ export async function runMessageAction(
       accountId = boundAccountIds[0];
     }
   }
-  const shouldApplyPluginDefaultAccount = action === "send" || action === "poll";
-  if (!accountId && shouldApplyPluginDefaultAccount) {
-    // Keep generic send/poll paths aligned with channel-native actions that
-    // already resolve their configured default account internally.
+  const shouldApplyWhatsAppDefaultAccount =
+    channel === "whatsapp" && (action === "send" || action === "poll");
+  if (!accountId && shouldApplyWhatsAppDefaultAccount) {
+    // WhatsApp listener lookup is keyed by the resolved linked account and
+    // does not have the omitted-account credential fallback semantics used by
+    // some token-based channels, so keep this normalization scoped to WhatsApp.
     const pluginDefaultAccountId = resolveOutboundChannelPlugin({ channel, cfg })
       ?.config.defaultAccountId?.(cfg)
       ?.trim();
