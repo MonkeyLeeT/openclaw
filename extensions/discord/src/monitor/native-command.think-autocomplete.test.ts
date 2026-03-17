@@ -105,5 +105,7 @@ describe("discord native /think autocomplete", () => {
     const choices = respond.mock.calls[0]?.[0] ?? [];
     const values = choices.map((choice) => choice.value);
     expect(values).toContain("xhigh");
+    expect(mocks.loadSessionStore).toHaveBeenCalledWith("/tmp/openclaw-sessions.mock.json");
+    expect(mocks.loadSessionStore.mock.calls[0]?.[1]).toBeUndefined();
   });
 });
