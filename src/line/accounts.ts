@@ -142,15 +142,12 @@ export function resolveLineAccount(params: {
     accountConfig,
   });
 
-  const baseEnabled = lineConfig?.enabled !== false;
-  const accountEnabled = mergedConfig.enabled !== false;
   const enabled =
     accountId === DEFAULT_ACCOUNT_ID
-      ? baseEnabled && accountEnabled
-      : Boolean(accountConfig) && baseEnabled && accountEnabled;
+      ? (mergedConfig.enabled ?? true)
+      : Boolean(accountConfig) && (mergedConfig.enabled ?? true);
   const name =
-    accountConfig?.name?.trim() ||
-    (accountId === DEFAULT_ACCOUNT_ID ? lineConfig?.name?.trim() || undefined : undefined);
+    accountConfig?.name ?? (accountId === DEFAULT_ACCOUNT_ID ? lineConfig?.name : undefined);
 
   return {
     accountId,
