@@ -7,13 +7,16 @@ import { createNoopThreadBindingManager } from "./thread-bindings.js";
 
 const mocks = vi.hoisted(() => ({
   resolveBoundConversationRoute: vi.fn(),
+  resolveEffectiveRoute: vi.fn((params: { route: { agentId: string; sessionKey: string } }) => {
+    return params.route;
+  }),
   loadSessionStore: vi.fn(),
   resolveStorePath: vi.fn(),
 }));
 
 vi.mock("./route-resolution.js", () => ({
   resolveDiscordBoundConversationRoute: mocks.resolveBoundConversationRoute,
-  resolveDiscordEffectiveRoute: vi.fn(),
+  resolveDiscordEffectiveRoute: mocks.resolveEffectiveRoute,
 }));
 
 vi.mock("../../../../src/config/sessions.js", async (importOriginal) => {
@@ -28,7 +31,7 @@ vi.mock("../../../../src/config/sessions.js", async (importOriginal) => {
 describe("discord native /think autocomplete", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.resolveBoundConversationRoute.mockResolvedValue({
+    mocks.resolveBoundConversationRoute.mockReturnValue({
       agentId: "main",
       sessionKey: "discord:session:1",
     });
