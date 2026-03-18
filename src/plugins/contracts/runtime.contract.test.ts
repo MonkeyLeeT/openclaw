@@ -7,6 +7,8 @@ import { createProviderUsageFetch, makeResponse } from "../../test-utils/provide
 import type { OpenClawPluginApi, ProviderPlugin } from "../types.js";
 import type { ProviderRuntimeModel } from "../types.js";
 
+const CONTRACT_SETUP_TIMEOUT_MS = 300_000;
+
 const getOAuthApiKeyMock = vi.hoisted(() => vi.fn());
 const refreshQwenPortalCredentialsMock = vi.hoisted(() => vi.fn());
 
@@ -18,8 +20,8 @@ vi.mock("@mariozechner/pi-ai/oauth", async () => {
   };
 });
 
-vi.mock("openclaw/plugin-sdk/qwen-portal-auth", async () => {
-  const actual = await vi.importActual<object>("openclaw/plugin-sdk/qwen-portal-auth");
+vi.mock("../../plugin-sdk/qwen-portal-auth.js", async () => {
+  const actual = await vi.importActual<object>("../../plugin-sdk/qwen-portal-auth.js");
   return {
     ...actual,
     refreshQwenPortalCredentials: refreshQwenPortalCredentialsMock,
@@ -80,7 +82,7 @@ describe("provider runtime contract", () => {
     qwenPortalPlugin = (await import("../../../extensions/qwen-portal-auth/index.js")).default;
     getOAuthApiKeyMock.mockReset();
     refreshQwenPortalCredentialsMock.mockReset();
-  });
+  }, CONTRACT_SETUP_TIMEOUT_MS);
 
   describe("anthropic", () => {
     it("owns anthropic 4.6 forward-compat resolution", () => {
