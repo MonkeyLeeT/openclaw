@@ -13,6 +13,7 @@ import {
 } from "@buape/carbon";
 import { ButtonStyle } from "discord-api-types/v10";
 import { resolveDefaultModelForAgent } from "openclaw/plugin-sdk/agent-runtime";
+import { resolveConfiguredBindingRoute } from "openclaw/plugin-sdk/conversation-runtime";
 import {
   buildCommandTextFromArgs,
   findCommandByNativeName,
@@ -47,7 +48,10 @@ import {
   toDiscordModelPickerMessagePayload,
   type DiscordModelPickerCommandContext,
 } from "./model-picker.js";
-import { resolveDiscordBoundConversationRoute } from "./route-resolution.js";
+import {
+  resolveDiscordBoundConversationRoute,
+  resolveDiscordEffectiveRoute,
+} from "./route-resolution.js";
 import type { ThreadBindingManager } from "./thread-bindings.js";
 import { resolveDiscordThreadParentInfo } from "./threading.js";
 
@@ -258,10 +262,7 @@ async function resolveDiscordModelPickerRoute(params: {
     threadParentId = parentInfo.id;
   }
 
-  const threadBinding = isThreadChannel
-    ? params.threadBindings.getByThreadId(rawChannelId)
-    : undefined;
-  return resolveDiscordBoundConversationRoute({
+  const route = resolveDiscordBoundConversationRoute({
     cfg,
     accountId,
     guildId: interaction.guild?.id ?? undefined,
@@ -271,7 +272,31 @@ async function resolveDiscordModelPickerRoute(params: {
     directUserId: interaction.user?.id ?? rawChannelId,
     conversationId: rawChannelId,
     parentConversationId: threadParentId,
-    boundSessionKey: threadBinding?.targetSessionKey,
+  });
+  const threadBinding = isThreadChannel
+    ? params.threadBindings.getByThreadId(rawChannelId)
+    : undefined;
+  const configuredRoute =
+    threadBinding == null
+      ? resolveConfiguredBindingRoute({
+          cfg,
+          route,
+          conversation: {
+            channel: "discord",
+            accountId,
+            conversationId: rawChannelId,
+            parentConversationId: threadParentId,
+          },
+        })
+      : null;
+  const configuredBinding = configuredRoute?.bindingResolution ?? null;
+  const configuredBoundSessionKey = configuredRoute?.boundSessionKey?.trim() || undefined;
+  const boundSessionKey = threadBinding?.targetSessionKey?.trim() || configuredBoundSessionKey;
+  return resolveDiscordEffectiveRoute({
+    route,
+    boundSessionKey,
+    configuredRoute,
+    matchedBy: configuredBinding ? "binding.channel" : undefined,
   });
 }
 
