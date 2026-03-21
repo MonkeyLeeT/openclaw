@@ -13,7 +13,6 @@ import {
 } from "@buape/carbon";
 import { ButtonStyle } from "discord-api-types/v10";
 import { resolveDefaultModelForAgent } from "openclaw/plugin-sdk/agent-runtime";
-import { resolveConfiguredBindingRoute } from "openclaw/plugin-sdk/conversation-runtime";
 import {
   buildCommandTextFromArgs,
   findCommandByNativeName,
@@ -28,6 +27,7 @@ import {
 } from "openclaw/plugin-sdk/command-auth";
 import type { OpenClawConfig, loadConfig } from "openclaw/plugin-sdk/config-runtime";
 import { loadSessionStore, resolveStorePath } from "openclaw/plugin-sdk/config-runtime";
+import { resolveConfiguredBindingRoute } from "openclaw/plugin-sdk/conversation-runtime";
 import type { ResolvedAgentRoute } from "openclaw/plugin-sdk/routing";
 import { logVerbose } from "openclaw/plugin-sdk/runtime-env";
 import { chunkItems, withTimeout } from "openclaw/plugin-sdk/text-runtime";

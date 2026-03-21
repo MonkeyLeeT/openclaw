@@ -1,58 +1,48 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { ChannelType, type AutocompleteInteraction } from "@buape/carbon";
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { listNativeCommandSpecs } from "../../../../src/auto-reply/commands-registry.js";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import {
+  findCommandByNativeName,
+  resolveCommandArgChoices,
+} from "../../../../src/auto-reply/commands-registry.js";
 import type { OpenClawConfig, loadConfig } from "../../../../src/config/config.js";
-import { createDiscordNativeCommand } from "./native-command.js";
+import { clearSessionStoreCacheForTest } from "../../../../src/config/sessions/store.js";
+import { resolveDiscordNativeChoiceContext } from "./native-command-ui.js";
 import { createNoopThreadBindingManager } from "./thread-bindings.js";
 
-const mocks = vi.hoisted(() => ({
-  resolveBoundConversationRoute: vi.fn(),
-  resolveEffectiveRoute: vi.fn((params: { route: { agentId: string; sessionKey: string } }) => {
-    return params.route;
-  }),
-  loadSessionStore: vi.fn(),
-  resolveStorePath: vi.fn(),
-}));
-
-vi.mock("./route-resolution.js", () => ({
-  resolveDiscordBoundConversationRoute: mocks.resolveBoundConversationRoute,
-  resolveDiscordEffectiveRoute: mocks.resolveEffectiveRoute,
-}));
-
-vi.mock("../../../../src/config/sessions.js", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../../../../src/config/sessions.js")>();
-  return {
-    ...actual,
-    loadSessionStore: mocks.loadSessionStore,
-    resolveStorePath: mocks.resolveStorePath,
-  };
-});
+const STORE_PATH = path.join(
+  os.tmpdir(),
+  `openclaw-discord-think-autocomplete-${process.pid}.json`,
+);
+const SESSION_KEY = "agent:main:main";
 
 describe("discord native /think autocomplete", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.resolveBoundConversationRoute.mockReturnValue({
-      agentId: "main",
-      sessionKey: "discord:session:1",
-    });
-    mocks.resolveStorePath.mockReturnValue("/tmp/openclaw-sessions.mock.json");
-    mocks.loadSessionStore.mockReturnValue({
-      "discord:session:1": {
-        providerOverride: "openai-codex",
-        modelOverride: "gpt-5.4",
-      },
-    });
+    clearSessionStoreCacheForTest();
+    fs.mkdirSync(path.dirname(STORE_PATH), { recursive: true });
+    fs.writeFileSync(
+      STORE_PATH,
+      JSON.stringify({
+        [SESSION_KEY]: {
+          updatedAt: Date.now(),
+          providerOverride: "openai-codex",
+          modelOverride: "gpt-5.4",
+        },
+      }),
+      "utf8",
+    );
   });
 
-  it("uses bound session model override for /think choices", async () => {
-    const spec = listNativeCommandSpecs({ provider: "discord" }).find(
-      (entry) => entry.name === "think",
-    );
-    expect(spec).toBeTruthy();
-    if (!spec) {
-      return;
-    }
+  afterEach(() => {
+    clearSessionStoreCacheForTest();
+    try {
+      fs.unlinkSync(STORE_PATH);
+    } catch {}
+  });
 
+  it("uses the session override context for /think choices", async () => {
     const cfg = {
       agents: {
         defaults: {
@@ -61,38 +51,15 @@ describe("discord native /think autocomplete", () => {
           },
         },
       },
+      session: {
+        store: STORE_PATH,
+      },
     } as ReturnType<typeof loadConfig>;
-    const discordConfig = {} as NonNullable<OpenClawConfig["channels"]>["discord"];
-    const command = createDiscordNativeCommand({
-      command: spec,
-      cfg,
-      discordConfig,
-      accountId: "default",
-      sessionPrefix: "discord:slash",
-      ephemeralDefault: true,
-      threadBindings: createNoopThreadBindingManager("default"),
-    });
-
-    const levelOption = command.options?.find((entry) => entry.name === "level") as
-      | {
-          autocomplete?: (
-            interaction: AutocompleteInteraction & {
-              respond: (choices: Array<{ name: string; value: string }>) => Promise<void>;
-            },
-          ) => Promise<void>;
-        }
-      | undefined;
-    expect(typeof levelOption?.autocomplete).toBe("function");
-    if (typeof levelOption?.autocomplete !== "function") {
-      return;
-    }
-
-    const respond = vi.fn(async (_choices: Array<{ name: string; value: string }>) => {});
     const interaction = {
       options: {
         getFocused: () => ({ value: "xh" }),
       },
-      respond,
+      respond: async (_choices: Array<{ name: string; value: string }>) => {},
       rawData: {},
       channel: { id: "D1", type: ChannelType.DM },
       user: { id: "U1" },
@@ -102,13 +69,33 @@ describe("discord native /think autocomplete", () => {
       respond: (choices: Array<{ name: string; value: string }>) => Promise<void>;
     };
 
-    await levelOption.autocomplete(interaction);
+    const command = findCommandByNativeName("think", "discord");
+    expect(command).toBeTruthy();
+    const levelArg = command?.args?.find((entry) => entry.name === "level");
+    expect(levelArg).toBeTruthy();
+    if (!command || !levelArg) {
+      return;
+    }
 
-    expect(respond).toHaveBeenCalledTimes(1);
-    const choices = respond.mock.calls[0]?.[0] ?? [];
+    const context = await resolveDiscordNativeChoiceContext({
+      interaction,
+      cfg,
+      accountId: "default",
+      threadBindings: createNoopThreadBindingManager("default"),
+    });
+    expect(context).toEqual({
+      provider: "openai-codex",
+      model: "gpt-5.4",
+    });
+
+    const choices = resolveCommandArgChoices({
+      command,
+      arg: levelArg,
+      cfg,
+      provider: context?.provider,
+      model: context?.model,
+    });
     const values = choices.map((choice) => choice.value);
     expect(values).toContain("xhigh");
-    expect(mocks.loadSessionStore).toHaveBeenCalledWith("/tmp/openclaw-sessions.mock.json");
-    expect(mocks.loadSessionStore.mock.calls[0]?.[1]).toBeUndefined();
   });
 });
