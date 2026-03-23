@@ -315,7 +315,6 @@ export function createDiscordNativeCommand(params: {
       resolveDiscordNativeChoiceContext({
         interaction,
         cfg,
-        discordConfig,
         accountId,
         threadBindings,
       }),

@@ -1,12 +1,8 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import { ChannelType } from "discord-api-types/v10";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { NativeCommandSpec } from "../../../../src/auto-reply/commands-registry.js";
 import * as dispatcherModule from "../../../../src/auto-reply/reply/provider-dispatcher.js";
 import type { OpenClawConfig } from "../../../../src/config/config.js";
-import { clearSessionStoreCacheForTest } from "../../../../src/config/sessions/store.js";
 import type { DiscordAccountConfig } from "../../../../src/config/types.discord.js";
 import * as pluginCommandsModule from "../../../../src/plugins/commands.js";
 import { createDiscordNativeCommand } from "./native-command.js";
@@ -14,13 +10,7 @@ import {
   createMockCommandInteraction,
   type MockCommandInteraction,
 } from "./native-command.test-helpers.js";
-import { resolveDiscordBoundConversationRoute } from "./route-resolution.js";
 import { createNoopThreadBindingManager } from "./thread-bindings.js";
-
-const STORE_PATH = path.join(
-  os.tmpdir(),
-  `openclaw-discord-native-command-allowfrom-${process.pid}.json`,
-);
 
 function createInteraction(params?: { userId?: string }): MockCommandInteraction {
   return createMockCommandInteraction({
@@ -120,10 +110,6 @@ function expectUnauthorizedReply(interaction: MockCommandInteraction) {
 describe("Discord native slash commands with commands.allowFrom", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
-    clearSessionStoreCacheForTest();
-    try {
-      fs.unlinkSync(STORE_PATH);
-    } catch {}
   });
 
   it("authorizes guild slash commands when commands.allowFrom.discord matches the sender", async () => {
@@ -179,93 +165,6 @@ describe("Discord native slash commands with commands.allowFrom", () => {
     });
     expect(dispatchSpy).not.toHaveBeenCalled();
     expectUnauthorizedReply(interaction);
-  });
-
-  it("does not expose session-derived /think choices to unauthorized guild users", async () => {
-    const cfg = createConfig();
-    cfg.agents = {
-      defaults: {
-        model: {
-          primary: "anthropic/claude-sonnet-4.5",
-        },
-      },
-    };
-    cfg.session = { store: STORE_PATH };
-    const route = resolveDiscordBoundConversationRoute({
-      cfg,
-      accountId: "default",
-      guildId: "345678901234567890",
-      memberRoleIds: [],
-      isDirectMessage: false,
-      isGroupDm: false,
-      directUserId: "999999999999999999",
-      conversationId: "234567890123456789",
-    });
-    fs.writeFileSync(
-      STORE_PATH,
-      JSON.stringify({
-        [route.sessionKey]: {
-          updatedAt: Date.now(),
-          providerOverride: "openai-codex",
-          modelOverride: "gpt-5.4",
-        },
-      }),
-      "utf8",
-    );
-
-    const command = createDiscordNativeCommand({
-      command: {
-        name: "think",
-        description: "Set thinking level.",
-        acceptsArgs: true,
-      },
-      cfg,
-      discordConfig: cfg.channels?.discord ?? {},
-      accountId: "default",
-      sessionPrefix: "discord:slash",
-      ephemeralDefault: true,
-      threadBindings: createNoopThreadBindingManager("default"),
-    });
-    const levelOption = command.options?.find((entry) => entry.name === "level") as
-      | {
-          autocomplete?: (interaction: {
-            options: { getFocused: () => { value: string } };
-            respond: (choices: Array<{ name: string; value: string }>) => Promise<void>;
-            rawData: { member: { roles: string[] } };
-            channel: { id: string; type: ChannelType };
-            user: { id: string; username: string; globalName: string };
-            guild: { id: string; name: string };
-            client: object;
-          }) => Promise<void>;
-        }
-      | undefined;
-    expect(typeof levelOption?.autocomplete).toBe("function");
-    if (typeof levelOption?.autocomplete !== "function") {
-      return;
-    }
-
-    const respond = vi.fn().mockResolvedValue(undefined);
-    await levelOption.autocomplete({
-      options: {
-        getFocused: () => ({ value: "xh" }),
-      },
-      respond,
-      rawData: {
-        member: { roles: [] },
-      },
-      channel: { id: "234567890123456789", type: ChannelType.GuildText },
-      user: {
-        id: "999999999999999999",
-        username: "discord-user",
-        globalName: "Discord User",
-      },
-      guild: { id: "345678901234567890", name: "Test Guild" },
-      client: {},
-    });
-
-    const choices = respond.mock.calls[0]?.[0] ?? [];
-    const values = choices.map((choice: { value: string }) => choice.value);
-    expect(values).not.toContain("xhigh");
   });
 
   it("uses the root discord maxLinesPerMessage when runtime discordConfig omits it", async () => {

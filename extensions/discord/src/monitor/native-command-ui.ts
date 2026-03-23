@@ -17,7 +17,6 @@ import {
   buildCommandTextFromArgs,
   findCommandByNativeName,
   listChatCommands,
-  resolveCommandAuthorizedFromAuthorizers,
   resolveCommandArgChoices,
   resolveStoredModelOverride,
   serializeCommandArgs,
@@ -27,24 +26,15 @@ import {
   type CommandArgs,
 } from "openclaw/plugin-sdk/command-auth";
 import type { OpenClawConfig, loadConfig } from "openclaw/plugin-sdk/config-runtime";
-import {
-  isDangerousNameMatchingEnabled,
-  resolveOpenProviderRuntimeGroupPolicy,
-} from "openclaw/plugin-sdk/config-runtime";
 import { loadSessionStore, resolveStorePath } from "openclaw/plugin-sdk/config-runtime";
 import { resolveConfiguredBindingRoute } from "openclaw/plugin-sdk/conversation-runtime";
 import type { ResolvedAgentRoute } from "openclaw/plugin-sdk/routing";
 import { logVerbose } from "openclaw/plugin-sdk/runtime-env";
 import { chunkItems, withTimeout } from "openclaw/plugin-sdk/text-runtime";
 import {
-  isDiscordGroupAllowedByPolicy,
-  normalizeDiscordAllowList,
   normalizeDiscordSlug,
   resolveDiscordChannelConfigWithFallback,
-  resolveDiscordAllowListMatch,
   resolveDiscordGuildEntry,
-  resolveDiscordMemberAccessState,
-  resolveDiscordOwnerAccess,
 } from "./allow-list.js";
 import { resolveDiscordChannelInfo } from "./message-utils.js";
 import {
@@ -66,21 +56,10 @@ import {
   resolveDiscordBoundConversationRoute,
   resolveDiscordEffectiveRoute,
 } from "./route-resolution.js";
-import { resolveDiscordSenderIdentity } from "./sender-identity.js";
 import type { ThreadBindingManager } from "./thread-bindings.js";
 import { resolveDiscordThreadParentInfo } from "./threading.js";
 
 type DiscordConfig = NonNullable<OpenClawConfig["channels"]>["discord"];
-type DiscordModelPickerRouteContext = {
-  route: ResolvedAgentRoute;
-  sender: ReturnType<typeof resolveDiscordSenderIdentity>;
-  guildInfo: ReturnType<typeof resolveDiscordGuildEntry>;
-  channelConfig: ReturnType<typeof resolveDiscordChannelConfigWithFallback> | null;
-  memberRoleIds: string[];
-  allowNameMatching: boolean;
-  rawChannelId: string;
-  isThreadChannel: boolean;
-};
 
 const DISCORD_COMMAND_ARG_CUSTOM_ID_KEY = "cmdarg";
 
@@ -258,19 +237,6 @@ async function resolveDiscordModelPickerRoute(params: {
   accountId: string;
   threadBindings: ThreadBindingManager;
 }) {
-  return (await resolveDiscordModelPickerRouteContext(params)).route;
-}
-
-async function resolveDiscordModelPickerRouteContext(params: {
-  interaction:
-    | CommandInteraction
-    | ButtonInteraction
-    | StringSelectMenuInteraction
-    | AutocompleteInteraction;
-  cfg: ReturnType<typeof loadConfig>;
-  accountId: string;
-  threadBindings: ThreadBindingManager;
-}): Promise<DiscordModelPickerRouteContext> {
   const { interaction, cfg, accountId } = params;
   const channel = interaction.channel;
   const channelType = channel?.type;
@@ -284,11 +250,6 @@ async function resolveDiscordModelPickerRouteContext(params: {
   const memberRoleIds = Array.isArray(interaction.rawData.member?.roles)
     ? interaction.rawData.member.roles.map((roleId: string) => String(roleId))
     : [];
-  const sender = resolveDiscordSenderIdentity({
-    author: interaction.user,
-    pluralkitInfo: null,
-  });
-  const allowNameMatching = isDangerousNameMatchingEnabled(cfg.channels?.discord ?? {});
   let threadParentId: string | undefined;
   let threadParentName: string | undefined;
   let threadParentSlug = "";
@@ -309,26 +270,6 @@ async function resolveDiscordModelPickerRouteContext(params: {
     threadParentSlug = threadParentName ? normalizeDiscordSlug(threadParentName) : "";
   }
 
-  const guildInfo = resolveDiscordGuildEntry({
-    guild: interaction.guild ?? undefined,
-    guildId: interaction.guild?.id ?? undefined,
-    guildEntries: cfg.channels?.discord?.guilds,
-  });
-  const channelName =
-    channel && "name" in channel ? (channel.name as string | undefined) : undefined;
-  const channelSlug = channelName ? normalizeDiscordSlug(channelName) : "";
-  const channelConfig = interaction.guild
-    ? resolveDiscordChannelConfigWithFallback({
-        guildInfo,
-        channelId: rawChannelId,
-        channelName,
-        channelSlug,
-        parentId: threadParentId,
-        parentName: threadParentName,
-        parentSlug: threadParentSlug,
-        scope: isThreadChannel ? "thread" : "channel",
-      })
-    : null;
   const route = resolveDiscordBoundConversationRoute({
     cfg,
     accountId,
@@ -359,170 +300,27 @@ async function resolveDiscordModelPickerRouteContext(params: {
   const configuredBinding = configuredRoute?.bindingResolution ?? null;
   const configuredBoundSessionKey = configuredRoute?.boundSessionKey?.trim() || undefined;
   const boundSessionKey = threadBinding?.targetSessionKey?.trim() || configuredBoundSessionKey;
-  return {
-    route: resolveDiscordEffectiveRoute({
-      route,
-      boundSessionKey,
-      configuredRoute,
-      matchedBy: configuredBinding ? "binding.channel" : undefined,
-    }),
-    sender,
-    guildInfo,
-    channelConfig,
-    memberRoleIds,
-    allowNameMatching,
-    rawChannelId,
-    isThreadChannel,
-  };
-}
-
-function resolveDiscordNativeAutocompleteAllowlistAccess(params: {
-  cfg: OpenClawConfig;
-  accountId?: string | null;
-  sender: { id: string; name?: string; tag?: string };
-  chatType: "direct" | "group" | "thread" | "channel";
-  conversationId?: string;
-}) {
-  const commandsAllowFrom = params.cfg.commands?.allowFrom;
-  if (!commandsAllowFrom || typeof commandsAllowFrom !== "object") {
-    return { configured: false, allowed: false } as const;
-  }
-  const rawAllowList = Array.isArray(commandsAllowFrom.discord)
-    ? commandsAllowFrom.discord
-    : commandsAllowFrom["*"];
-  if (!Array.isArray(rawAllowList)) {
-    return { configured: false, allowed: false } as const;
-  }
-  const allowList = normalizeDiscordAllowList(rawAllowList.map(String), [
-    "discord:",
-    "user:",
-    "pk:",
-  ]);
-  if (!allowList) {
-    return { configured: true, allowed: false } as const;
-  }
-  const match = resolveDiscordAllowListMatch({
-    allowList,
-    candidate: params.sender,
-    allowNameMatching: false,
-  });
-  return { configured: true, allowed: match.allowed } as const;
-}
-
-async function resolveDiscordNativeChoiceContextAuthorized(params: {
-  interaction: AutocompleteInteraction;
-  cfg: ReturnType<typeof loadConfig>;
-  discordConfig: DiscordConfig;
-  accountId: string;
-  routeContext: DiscordModelPickerRouteContext;
-}): Promise<boolean> {
-  const { interaction, cfg, discordConfig, accountId, routeContext } = params;
-  if (!interaction.guild) {
-    return true;
-  }
-  if (routeContext.channelConfig?.enabled === false) {
-    return false;
-  }
-  if (routeContext.channelConfig?.allowed === false) {
-    return false;
-  }
-  const useAccessGroups = cfg.commands?.useAccessGroups !== false;
-  if (useAccessGroups) {
-    const channelAllowlistConfigured =
-      Boolean(routeContext.guildInfo?.channels) &&
-      Object.keys(routeContext.guildInfo?.channels ?? {}).length > 0;
-    const channelAllowed = routeContext.channelConfig?.allowed !== false;
-    const { groupPolicy } = resolveOpenProviderRuntimeGroupPolicy({
-      providerConfigPresent: cfg.channels?.discord !== undefined,
-      groupPolicy: discordConfig?.groupPolicy,
-      defaultGroupPolicy: cfg.channels?.defaults?.groupPolicy,
-    });
-    const allowByPolicy = isDiscordGroupAllowedByPolicy({
-      groupPolicy,
-      guildAllowlisted: Boolean(routeContext.guildInfo),
-      channelAllowlistConfigured,
-      channelAllowed,
-    });
-    if (!allowByPolicy) {
-      return false;
-    }
-  }
-  const { ownerAllowList, ownerAllowed: ownerOk } = resolveDiscordOwnerAccess({
-    allowFrom: discordConfig?.allowFrom ?? discordConfig?.dm?.allowFrom ?? [],
-    sender: {
-      id: routeContext.sender.id,
-      name: routeContext.sender.name,
-      tag: routeContext.sender.tag,
-    },
-    allowNameMatching: routeContext.allowNameMatching,
-  });
-  const commandsAllowFromAccess = resolveDiscordNativeAutocompleteAllowlistAccess({
-    cfg,
-    accountId,
-    sender: {
-      id: routeContext.sender.id,
-      name: routeContext.sender.name,
-      tag: routeContext.sender.tag,
-    },
-    chatType: routeContext.isThreadChannel ? "thread" : "channel",
-    conversationId: routeContext.rawChannelId || undefined,
-  });
-  const { hasAccessRestrictions, memberAllowed } = resolveDiscordMemberAccessState({
-    channelConfig: routeContext.channelConfig,
-    guildInfo: routeContext.guildInfo,
-    memberRoleIds: routeContext.memberRoleIds,
-    sender: routeContext.sender,
-    allowNameMatching: routeContext.allowNameMatching,
-  });
-  const authorizers = useAccessGroups
-    ? [
-        {
-          configured: commandsAllowFromAccess.configured,
-          allowed: commandsAllowFromAccess.allowed,
-        },
-        { configured: ownerAllowList != null, allowed: ownerOk },
-        { configured: hasAccessRestrictions, allowed: memberAllowed },
-      ]
-    : [
-        {
-          configured: commandsAllowFromAccess.configured,
-          allowed: commandsAllowFromAccess.allowed,
-        },
-        { configured: hasAccessRestrictions, allowed: memberAllowed },
-      ];
-  return resolveCommandAuthorizedFromAuthorizers({
-    useAccessGroups,
-    authorizers,
-    modeWhenAccessGroupsOff: "configured",
+  return resolveDiscordEffectiveRoute({
+    route,
+    boundSessionKey,
+    configuredRoute,
+    matchedBy: configuredBinding ? "binding.channel" : undefined,
   });
 }
 
 export async function resolveDiscordNativeChoiceContext(params: {
   interaction: AutocompleteInteraction;
   cfg: ReturnType<typeof loadConfig>;
-  discordConfig?: DiscordConfig;
   accountId: string;
   threadBindings: ThreadBindingManager;
 }): Promise<{ provider?: string; model?: string } | null> {
   try {
-    const routeContext = await resolveDiscordModelPickerRouteContext({
+    const route = await resolveDiscordModelPickerRoute({
       interaction: params.interaction,
       cfg: params.cfg,
       accountId: params.accountId,
       threadBindings: params.threadBindings,
     });
-    const discordConfig = params.discordConfig ?? params.cfg.channels?.discord ?? {};
-    const authorized = await resolveDiscordNativeChoiceContextAuthorized({
-      interaction: params.interaction,
-      cfg: params.cfg,
-      discordConfig,
-      accountId: params.accountId,
-      routeContext,
-    });
-    if (!authorized) {
-      return null;
-    }
-    const route = routeContext.route;
     const fallback = resolveDefaultModelForAgent({
       cfg: params.cfg,
       agentId: route.agentId,
