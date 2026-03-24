@@ -401,13 +401,16 @@ Details: [Security guide](https://docs.openclaw.ai/gateway/security) · [Docker 
 
 WeChat support is provided by the official Tencent plugin [`@tencent-weixin/openclaw-weixin`](https://www.npmjs.com/package/@tencent-weixin/openclaw-weixin), which uses the WeChat iLink Bot API. Requires WeChat 8.0.70+ with the ClawBot plugin enabled (WeChat > Me > Settings > Plugins). The ClawBot plugin is being rolled out gradually by Tencent — QR code login will fail if the plugin is not yet available on your WeChat account.
 
+**Version compatibility:** v2.x requires OpenClaw `>=2026.3.22`. For older hosts, install the legacy branch: `openclaw plugins install @tencent-weixin/openclaw-weixin@legacy`.
+
 **Setup:**
 
 ```bash
-# Install the plugin
+# Install the plugin (v2.x for OpenClaw >= 2026.3.22)
 openclaw plugins install "@tencent-weixin/openclaw-weixin"
 
 # Enable it
+openclaw config set plugins.allow '["openclaw-weixin"]'
 openclaw config set plugins.entries.openclaw-weixin.enabled true
 
 # Log in by scanning a QR code with your phone (WeChat mobile app)
