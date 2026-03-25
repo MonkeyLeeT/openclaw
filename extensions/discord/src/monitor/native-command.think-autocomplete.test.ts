@@ -2,15 +2,50 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { ChannelType, type AutocompleteInteraction } from "@buape/carbon";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   findCommandByNativeName,
   resolveCommandArgChoices,
 } from "../../../../src/auto-reply/commands-registry.js";
 import type { OpenClawConfig, loadConfig } from "../../../../src/config/config.js";
 import { clearSessionStoreCacheForTest } from "../../../../src/config/sessions/store.js";
+import { createConfiguredBindingConversationRuntimeModuleMock } from "../../../../test/helpers/extensions/configured-binding-runtime.js";
 import { resolveDiscordNativeChoiceContext } from "./native-command-ui.js";
 import { createNoopThreadBindingManager } from "./thread-bindings.js";
+
+const ensureConfiguredBindingRouteReadyMock = vi.hoisted(() =>
+  vi.fn<() => Promise<{ ok: boolean; error?: string }>>(async () => ({ ok: true })),
+);
+const resolveConfiguredBindingRouteMock = vi.hoisted(() =>
+  vi.fn<
+    () => {
+      bindingResolution: {
+        record: {
+          conversation: {
+            channel: string;
+            accountId: string;
+            conversationId: string;
+          };
+        };
+      };
+      boundSessionKey: string;
+      route: {
+        agentId: string;
+        sessionKey: string;
+      };
+    } | null
+  >(() => null),
+);
+
+vi.mock("openclaw/plugin-sdk/conversation-runtime", async (importOriginal) => {
+  return await createConfiguredBindingConversationRuntimeModuleMock(
+    {
+      ensureConfiguredBindingRouteReadyMock,
+      resolveConfiguredBindingRouteMock,
+    },
+    importOriginal,
+  );
+});
 
 const STORE_PATH = path.join(
   os.tmpdir(),
@@ -21,6 +56,10 @@ const SESSION_KEY = "agent:main:main";
 describe("discord native /think autocomplete", () => {
   beforeEach(() => {
     clearSessionStoreCacheForTest();
+    ensureConfiguredBindingRouteReadyMock.mockReset();
+    ensureConfiguredBindingRouteReadyMock.mockResolvedValue({ ok: true });
+    resolveConfiguredBindingRouteMock.mockReset();
+    resolveConfiguredBindingRouteMock.mockReturnValue(null);
     fs.mkdirSync(path.dirname(STORE_PATH), { recursive: true });
     fs.writeFileSync(
       STORE_PATH,
@@ -42,8 +81,8 @@ describe("discord native /think autocomplete", () => {
     } catch {}
   });
 
-  it("uses the session override context for /think choices", async () => {
-    const cfg = {
+  function createConfig() {
+    return {
       agents: {
         defaults: {
           model: {
@@ -55,6 +94,10 @@ describe("discord native /think autocomplete", () => {
         store: STORE_PATH,
       },
     } as ReturnType<typeof loadConfig>;
+  }
+
+  it("uses the session override context for /think choices", async () => {
+    const cfg = createConfig();
     const interaction = {
       options: {
         getFocused: () => ({ value: "xh" }),
@@ -97,5 +140,71 @@ describe("discord native /think autocomplete", () => {
     });
     const values = choices.map((choice) => choice.value);
     expect(values).toContain("xhigh");
+  });
+
+  it("falls back when a configured binding is unavailable", async () => {
+    const cfg = createConfig();
+    resolveConfiguredBindingRouteMock.mockReturnValue({
+      bindingResolution: {
+        record: {
+          conversation: {
+            channel: "discord",
+            accountId: "default",
+            conversationId: "C1",
+          },
+        },
+      },
+      boundSessionKey: SESSION_KEY,
+      route: {
+        agentId: "main",
+        sessionKey: SESSION_KEY,
+      },
+    });
+    ensureConfiguredBindingRouteReadyMock.mockResolvedValue({
+      ok: false,
+      error: "acpx exited",
+    });
+    const interaction = {
+      options: {
+        getFocused: () => ({ value: "xh" }),
+      },
+      respond: async (_choices: Array<{ name: string; value: string }>) => {},
+      rawData: {
+        member: { roles: [] },
+      },
+      channel: { id: "C1", type: ChannelType.GuildText },
+      user: { id: "U1" },
+      guild: { id: "G1" },
+      client: {},
+    } as unknown as AutocompleteInteraction & {
+      respond: (choices: Array<{ name: string; value: string }>) => Promise<void>;
+    };
+
+    const context = await resolveDiscordNativeChoiceContext({
+      interaction,
+      cfg,
+      accountId: "default",
+      threadBindings: createNoopThreadBindingManager("default"),
+    });
+
+    expect(context).toBeNull();
+    expect(ensureConfiguredBindingRouteReadyMock).toHaveBeenCalledTimes(1);
+
+    const command = findCommandByNativeName("think", "discord");
+    const levelArg = command?.args?.find((entry) => entry.name === "level");
+    expect(command).toBeTruthy();
+    expect(levelArg).toBeTruthy();
+    if (!command || !levelArg) {
+      return;
+    }
+    const choices = resolveCommandArgChoices({
+      command,
+      arg: levelArg,
+      cfg,
+      provider: context?.provider,
+      model: context?.model,
+    });
+    const values = choices.map((choice) => choice.value);
+    expect(values).not.toContain("xhigh");
   });
 });
