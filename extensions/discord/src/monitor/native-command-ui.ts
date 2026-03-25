@@ -288,7 +288,7 @@ async function resolveDiscordModelPickerRoute(params: {
   threadBindings: ThreadBindingManager;
 }) {
   const resolved = await resolveDiscordModelPickerRouteState(params);
-  return resolved.route;
+  return resolved.effectiveRoute;
 }
 
 export async function resolveDiscordNativeChoiceContext(params: {
