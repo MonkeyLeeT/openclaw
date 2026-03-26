@@ -222,45 +222,46 @@ function stubMinimaxFetch(baseResp: { status_code: number; status_msg: string },
 }
 
 function stubOpenAiCompletionsOkFetch(text = "ok") {
-  const fetch = vi.fn().mockResolvedValue(
-    new Response(
-      new ReadableStream<Uint8Array>({
-        start(controller) {
-          const encoder = new TextEncoder();
-          const chunks = [
-            `data: ${JSON.stringify({
-              id: "chatcmpl-moonshot-test",
-              object: "chat.completion.chunk",
-              created: Math.floor(Date.now() / 1000),
-              model: "kimi-k2.5",
-              choices: [
-                {
-                  index: 0,
-                  delta: { role: "assistant", content: text },
-                  finish_reason: null,
-                },
-              ],
-            })}\n\n`,
-            `data: ${JSON.stringify({
-              id: "chatcmpl-moonshot-test",
-              object: "chat.completion.chunk",
-              created: Math.floor(Date.now() / 1000),
-              model: "kimi-k2.5",
-              choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
-            })}\n\n`,
-            "data: [DONE]\n\n",
-          ];
-          for (const chunk of chunks) {
-            controller.enqueue(encoder.encode(chunk));
-          }
-          controller.close();
+  const fetch = vi.fn().mockImplementation(
+    async () =>
+      new Response(
+        new ReadableStream<Uint8Array>({
+          start(controller) {
+            const encoder = new TextEncoder();
+            const chunks = [
+              `data: ${JSON.stringify({
+                id: "chatcmpl-moonshot-test",
+                object: "chat.completion.chunk",
+                created: Math.floor(Date.now() / 1000),
+                model: "kimi-k2.5",
+                choices: [
+                  {
+                    index: 0,
+                    delta: { role: "assistant", content: text },
+                    finish_reason: null,
+                  },
+                ],
+              })}\n\n`,
+              `data: ${JSON.stringify({
+                id: "chatcmpl-moonshot-test",
+                object: "chat.completion.chunk",
+                created: Math.floor(Date.now() / 1000),
+                model: "kimi-k2.5",
+                choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
+              })}\n\n`,
+              "data: [DONE]\n\n",
+            ];
+            for (const chunk of chunks) {
+              controller.enqueue(encoder.encode(chunk));
+            }
+            controller.close();
+          },
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "text/event-stream" },
         },
-      }),
-      {
-        status: 200,
-        headers: { "content-type": "text/event-stream" },
-      },
-    ),
+      ),
   );
   global.fetch = withFetchPreconnect(fetch);
   return fetch;
