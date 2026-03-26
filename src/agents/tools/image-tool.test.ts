@@ -780,6 +780,7 @@ describe("image tool implicit imageModel config", () => {
 
   it("falls back to the generic image runtime when minimax-portal has no media provider registration", async () => {
     await withTempAgentDir(async (agentDir) => {
+      installImageUnderstandingProviderStubs();
       await writeAuthProfiles(agentDir, {
         version: 1,
         profiles: {
@@ -798,11 +799,6 @@ describe("image tool implicit imageModel config", () => {
           defaults: {
             model: { primary: "minimax-portal/MiniMax-M2.7" },
             imageModel: { primary: "minimax-portal/MiniMax-VL-01" },
-          },
-        },
-        plugins: {
-          entries: {
-            minimax: { enabled: true },
           },
         },
       };
