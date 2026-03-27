@@ -1132,15 +1132,19 @@ export function buildGatewaySessionRow(params: {
   );
   const runtimeModelPresent =
     Boolean(entry?.model?.trim()) || Boolean(entry?.modelProvider?.trim());
-  const transcriptUsage =
-    resolvePositiveNumber(resolveFreshSessionTotalTokens(entry)) === undefined ||
-    resolvePositiveNumber(entry?.contextTokens) === undefined ||
+  const needsTranscriptTotalTokens =
+    resolvePositiveNumber(resolveFreshSessionTotalTokens(entry)) === undefined;
+  const needsTranscriptContextTokens =
+    resolvePositiveNumber(entry?.contextTokens) === undefined;
+  const needsTranscriptEstimatedCostUsd =
     resolveEstimatedSessionCostUsd({
       cfg,
       provider: resolvedModel.provider,
       model: resolvedModel.model ?? DEFAULT_MODEL,
       entry,
-    }) === undefined
+    }) === undefined;
+  const transcriptUsage =
+    needsTranscriptTotalTokens || needsTranscriptContextTokens || needsTranscriptEstimatedCostUsd
       ? resolveTranscriptUsageFallback({
           cfg,
           key,
@@ -1153,7 +1157,9 @@ export function buildGatewaySessionRow(params: {
   const preferLiveSubagentModelIdentity =
     Boolean(subagentRun?.model?.trim()) && subagentStatus === "running";
   const shouldUseTranscriptModelIdentity =
-    runtimeModelPresent && !preferLiveSubagentModelIdentity;
+    runtimeModelPresent &&
+    !preferLiveSubagentModelIdentity &&
+    (needsTranscriptTotalTokens || needsTranscriptContextTokens);
   const resolvedModelIdentity = {
     provider: resolvedModel.provider,
     model: resolvedModel.model ?? DEFAULT_MODEL,
