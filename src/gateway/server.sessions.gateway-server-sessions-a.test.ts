@@ -1167,6 +1167,13 @@ describe("gateway server sessions", () => {
           cliSessionIds: {
             "claude-cli": "cli-session-123",
           },
+          cliSessionBindings: {
+            "claude-cli": {
+              sessionId: "cli-session-123",
+              authProfileId: "anthropic:work",
+              extraSystemPromptHash: "prompt-hash",
+            },
+          },
           claudeCliSessionId: "cli-session-123",
           deliveryContext: {
             channel: "discord",
@@ -1217,6 +1224,15 @@ describe("gateway server sessions", () => {
         execAsk?: string;
         execNode?: string;
         displayName?: string;
+        cliSessionBindings?: Record<
+          string,
+          {
+            sessionId?: string;
+            authProfileId?: string;
+            extraSystemPromptHash?: string;
+            mcpConfigHash?: string;
+          }
+        >;
         cliSessionIds?: Record<string, string>;
         claudeCliSessionId?: string;
         deliveryContext?: {
@@ -1263,8 +1279,17 @@ describe("gateway server sessions", () => {
     expect(reset.payload?.entry.execAsk).toBe("on-miss");
     expect(reset.payload?.entry.execNode).toBe("mac-mini");
     expect(reset.payload?.entry.displayName).toBe("Ops Child");
-    expect(reset.payload?.entry.cliSessionIds).toBeUndefined();
-    expect(reset.payload?.entry.claudeCliSessionId).toBeUndefined();
+    expect(reset.payload?.entry.cliSessionBindings).toEqual({
+      "claude-cli": {
+        sessionId: "cli-session-123",
+        authProfileId: "anthropic:work",
+        extraSystemPromptHash: "prompt-hash",
+      },
+    });
+    expect(reset.payload?.entry.cliSessionIds).toEqual({
+      "claude-cli": "cli-session-123",
+    });
+    expect(reset.payload?.entry.claudeCliSessionId).toBe("cli-session-123");
     expect(reset.payload?.entry.deliveryContext).toEqual({
       channel: "discord",
       to: "discord:child",
@@ -1309,6 +1334,15 @@ describe("gateway server sessions", () => {
         execAsk?: string;
         execNode?: string;
         displayName?: string;
+        cliSessionBindings?: Record<
+          string,
+          {
+            sessionId?: string;
+            authProfileId?: string;
+            extraSystemPromptHash?: string;
+            mcpConfigHash?: string;
+          }
+        >;
         cliSessionIds?: Record<string, string>;
         claudeCliSessionId?: string;
         deliveryContext?: {
@@ -1353,8 +1387,17 @@ describe("gateway server sessions", () => {
     expect(store["agent:main:subagent:child"]?.execAsk).toBe("on-miss");
     expect(store["agent:main:subagent:child"]?.execNode).toBe("mac-mini");
     expect(store["agent:main:subagent:child"]?.displayName).toBe("Ops Child");
-    expect(store["agent:main:subagent:child"]?.cliSessionIds).toBeUndefined();
-    expect(store["agent:main:subagent:child"]?.claudeCliSessionId).toBeUndefined();
+    expect(store["agent:main:subagent:child"]?.cliSessionBindings).toEqual({
+      "claude-cli": {
+        sessionId: "cli-session-123",
+        authProfileId: "anthropic:work",
+        extraSystemPromptHash: "prompt-hash",
+      },
+    });
+    expect(store["agent:main:subagent:child"]?.cliSessionIds).toEqual({
+      "claude-cli": "cli-session-123",
+    });
+    expect(store["agent:main:subagent:child"]?.claudeCliSessionId).toBe("cli-session-123");
     expect(store["agent:main:subagent:child"]?.deliveryContext).toEqual({
       channel: "discord",
       to: "discord:child",

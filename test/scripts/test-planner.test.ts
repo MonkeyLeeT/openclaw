@@ -356,7 +356,7 @@ describe("test planner", () => {
     expect(manifest.jobs.checkDocs.enabled).toBe(true);
   });
 
-  it("adds push-only compat and release lanes to push manifests", () => {
+  it("adds the push-only compat lane to push manifests", () => {
     const manifest = buildCIExecutionManifest(
       {
         eventName: "push",
@@ -374,7 +374,6 @@ describe("test planner", () => {
       },
     );
 
-    expect(manifest.jobs.releaseCheck.enabled).toBe(true);
     expect(
       manifest.jobs.checks.matrix.include.some((entry) => entry.task === "compat-node22"),
     ).toBe(true);
@@ -419,6 +418,19 @@ describe("resolveVitestFsModuleCachePath", () => {
         unitId: "unit-fast-1",
       }),
     ).toBe("/repo/node_modules/.experimental-vitest-cache/unit-fast-1");
+  });
+
+  it("honors the requested Windows platform when building the cache path", () => {
+    expect(
+      resolveVitestFsModuleCachePath({
+        cwd: "/repo",
+        env: {
+          OPENCLAW_VITEST_FS_MODULE_CACHE: "1",
+        },
+        platform: "win32",
+        unitId: "unit-fast-1",
+      }),
+    ).toBe("\\repo\\node_modules\\.experimental-vitest-cache\\unit-fast-1");
   });
 
   it("respects an explicit cache path override", () => {
