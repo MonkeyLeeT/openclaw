@@ -121,7 +121,6 @@ describe("plugin-sdk subpath exports", () => {
   it("keeps the curated public list free of internal implementation subpaths", () => {
     for (const deniedSubpath of [
       "acpx",
-      "compat",
       "device-pair",
       "lobster",
       "pairing-access",
@@ -188,6 +187,13 @@ describe("plugin-sdk subpath exports", () => {
     ]);
     expectSourceContains("telegram", 'export * from "./telegram-core.js";');
     expectSourceContains("telegram", 'export * from "./telegram-runtime.js";');
+    expectSourceMentions("imessage", [
+      "normalizeIMessageHandle",
+      "parseChatAllowTargetPrefixes",
+      "parseChatTargetPrefixesOrThrow",
+      "resolveServicePrefixedAllowTarget",
+      "resolveServicePrefixedTarget",
+    ]);
     expectSourceMentions("reply-history", [
       "buildPendingHistoryContextFromMap",
       "clearHistoryEntriesIfEnabled",
@@ -203,6 +209,12 @@ describe("plugin-sdk subpath exports", () => {
     });
     expectSourceMentions("account-helpers", ["createAccountListHelpers"]);
     expectSourceMentions("channel-actions", ["optionalStringEnum", "stringEnum"]);
+    expectSourceMentions("compat", [
+      "createPluginRuntimeStore",
+      "createScopedChannelConfigAdapter",
+      "resolveControlCommandGate",
+      "delegateCompactionToRuntime",
+    ]);
     expectSourceMentions("device-bootstrap", [
       "approveDevicePairing",
       "issueDeviceBootstrapToken",
@@ -235,6 +247,13 @@ describe("plugin-sdk subpath exports", () => {
       "editDiscordComponentMessage",
       "registerBuiltDiscordComponentMessage",
       "resolveDiscordAccount",
+    ]);
+    expectSourceMentions("huggingface", [
+      "buildHuggingfaceModelDefinition",
+      "buildHuggingfaceProvider",
+      "discoverHuggingfaceModels",
+      "HUGGINGFACE_MODEL_CATALOG",
+      "isHuggingfacePolicyLocked",
     ]);
     expectSourceMentions("conversation-runtime", [
       "recordInboundSession",
@@ -480,6 +499,12 @@ describe("plugin-sdk subpath exports", () => {
       "attachChannelToResult",
       "buildChannelSendResult",
     ]);
+    expectSourceMentions("direct-dm", [
+      "createDirectDmPreCryptoGuardPolicy",
+      "createPreCryptoDirectDmAuthorizer",
+      "dispatchInboundDirectDmWithRuntime",
+      "resolveInboundDirectDmAccessWithRuntime",
+    ]);
 
     expectSourceMentions("conversation-runtime", [
       "DISCORD_THREAD_BINDING_CHANNEL",
@@ -532,6 +557,14 @@ describe("plugin-sdk subpath exports", () => {
         "QIANFAN_BASE_URL",
         "resolveZaiBaseUrl",
       ],
+    });
+    expectSourceContract("provider-model-shared", {
+      mentions: ["DEFAULT_CONTEXT_TOKENS", "normalizeModelCompat", "cloneFirstTemplateModel"],
+      omits: ["applyOpenAIConfig", "buildKilocodeModelDefinition", "discoverHuggingfaceModels"],
+    });
+    expectSourceContract("provider-catalog-shared", {
+      mentions: ["buildSingleProviderApiKeyCatalog", "buildPairedProviderApiKeyCatalog"],
+      omits: ["buildDeepSeekProvider", "buildOpenAICodexProvider", "buildVeniceProvider"],
     });
 
     expectSourceMentions("setup", [
@@ -625,7 +658,9 @@ describe("plugin-sdk subpath exports", () => {
     const [
       coreSdk,
       channelActionsSdk,
+      globalSingletonSdk,
       textRuntimeSdk,
+      huggingfaceSdk,
       pluginEntrySdk,
       channelLifecycleSdk,
       channelPairingSdk,
@@ -634,7 +669,9 @@ describe("plugin-sdk subpath exports", () => {
     ] = await Promise.all([
       importResolvedPluginSdkSubpath("openclaw/plugin-sdk/core"),
       importResolvedPluginSdkSubpath("openclaw/plugin-sdk/channel-actions"),
+      importResolvedPluginSdkSubpath("openclaw/plugin-sdk/global-singleton"),
       importResolvedPluginSdkSubpath("openclaw/plugin-sdk/text-runtime"),
+      importResolvedPluginSdkSubpath("openclaw/plugin-sdk/huggingface"),
       importResolvedPluginSdkSubpath("openclaw/plugin-sdk/plugin-entry"),
       importResolvedPluginSdkSubpath("openclaw/plugin-sdk/channel-lifecycle"),
       importResolvedPluginSdkSubpath("openclaw/plugin-sdk/channel-pairing"),
@@ -648,9 +685,15 @@ describe("plugin-sdk subpath exports", () => {
     expect(typeof coreSdk.optionalStringEnum).toBe("function");
     expect(typeof channelActionsSdk.optionalStringEnum).toBe("function");
     expect(typeof channelActionsSdk.stringEnum).toBe("function");
+    expect(typeof globalSingletonSdk.resolveGlobalMap).toBe("function");
+    expect(typeof globalSingletonSdk.resolveGlobalSingleton).toBe("function");
+    expect(typeof globalSingletonSdk.createScopedExpiringIdCache).toBe("function");
     expect(typeof textRuntimeSdk.createScopedExpiringIdCache).toBe("function");
     expect(typeof textRuntimeSdk.resolveGlobalMap).toBe("function");
     expect(typeof textRuntimeSdk.resolveGlobalSingleton).toBe("function");
+    expect(typeof huggingfaceSdk.buildHuggingfaceProvider).toBe("function");
+    expect(typeof huggingfaceSdk.discoverHuggingfaceModels).toBe("function");
+    expect(Array.isArray(huggingfaceSdk.HUGGINGFACE_MODEL_CATALOG)).toBe(true);
 
     expectSourceMentions("infra-runtime", ["createRuntimeOutboundDelegates"]);
     expectSourceContains("infra-runtime", "../infra/outbound/send-deps.js");
