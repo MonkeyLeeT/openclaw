@@ -99,6 +99,7 @@ type FoundryModelCapabilities = {
   thinkingLevelMap?: Record<string, string | null>;
   input: Array<"text" | "image">;
   contextWindow: number;
+  contextTokens?: number;
   maxTokens: number;
   compat?: FoundryModelCompat;
 };
@@ -225,12 +226,45 @@ function supportsFoundryManualClaudeThinking(value?: string | null): boolean {
     : false;
 }
 
-function resolveFoundryModelTokenLimits(value?: string | null): {
+type FoundryModelTokenLimits = {
   contextWindow: number;
+  responsesContextTokens?: number;
   maxTokens: number;
-} {
+};
+
+const FOUNDRY_GPT_TOKEN_LIMITS = new Map<string, FoundryModelTokenLimits>([
+  ["gpt-5.6", { contextWindow: 1_050_000, maxTokens: 128_000 }],
+  ["gpt-5.6-sol", { contextWindow: 1_050_000, maxTokens: 128_000 }],
+  ["gpt-5.6-terra", { contextWindow: 1_050_000, maxTokens: 128_000 }],
+  ["gpt-5.6-luna", { contextWindow: 1_050_000, maxTokens: 128_000 }],
+  ["gpt-5.5", { contextWindow: 1_050_000, responsesContextTokens: 922_000, maxTokens: 128_000 }],
+  ["gpt-5.4", { contextWindow: 1_050_000, maxTokens: 128_000 }],
+  ["gpt-5.4-pro", { contextWindow: 1_050_000, maxTokens: 128_000 }],
+  ["gpt-5.4-mini", { contextWindow: 400_000, maxTokens: 128_000 }],
+  ["gpt-5.4-nano", { contextWindow: 400_000, maxTokens: 128_000 }],
+  ["gpt-5.3-codex", { contextWindow: 400_000, maxTokens: 128_000 }],
+  ["gpt-5.2", { contextWindow: 400_000, maxTokens: 128_000 }],
+  ["gpt-5.2-codex", { contextWindow: 400_000, maxTokens: 128_000 }],
+  ["gpt-5.1", { contextWindow: 400_000, maxTokens: 128_000 }],
+  ["gpt-5.1-codex", { contextWindow: 400_000, maxTokens: 128_000 }],
+  ["gpt-5.1-codex-mini", { contextWindow: 400_000, maxTokens: 128_000 }],
+  ["gpt-5.1-codex-max", { contextWindow: 400_000, maxTokens: 128_000 }],
+  ["gpt-5", { contextWindow: 400_000, maxTokens: 128_000 }],
+  ["gpt-5-mini", { contextWindow: 400_000, maxTokens: 128_000 }],
+  ["gpt-5-nano", { contextWindow: 400_000, maxTokens: 128_000 }],
+  ["gpt-5-codex", { contextWindow: 400_000, maxTokens: 128_000 }],
+  ["gpt-5-pro", { contextWindow: 400_000, maxTokens: 128_000 }],
+]);
+
+function resolveFoundryModelTokenLimits(value?: string | null): FoundryModelTokenLimits {
   const normalized = normalizeFoundryModelName(value);
   const normalizedVersion = normalized?.replace(/\./g, "-");
+  // Deployment aliases are arbitrary, so this table must stay keyed by the canonical
+  // model name discovered from Foundry. Unknown and chat variants retain the safe fallback.
+  const foundryGptTokenLimits = normalized ? FOUNDRY_GPT_TOKEN_LIMITS.get(normalized) : undefined;
+  if (foundryGptTokenLimits) {
+    return foundryGptTokenLimits;
+  }
   if (
     normalized &&
     (supportsClaudeAdaptiveThinking({ id: normalized }) ||
@@ -487,6 +521,9 @@ export function resolveFoundryModelCapabilities(
         ? ["text", "image"]
         : normalizedInput,
     contextWindow: tokenLimits.contextWindow,
+    ...(api === DEFAULT_GPT5_API && tokenLimits.responsesContextTokens
+      ? { contextTokens: tokenLimits.responsesContextTokens }
+      : {}),
     maxTokens: tokenLimits.maxTokens,
     compat: buildFoundryModelCompat(modelId, modelName, api),
   };
@@ -559,6 +596,7 @@ function buildFoundryProviderConfig(
           input: capabilities.input,
           cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
           contextWindow: capabilities.contextWindow,
+          ...(capabilities.contextTokens ? { contextTokens: capabilities.contextTokens } : {}),
           maxTokens: capabilities.maxTokens,
         },
         capabilities.compat ? { compat: capabilities.compat } : {},

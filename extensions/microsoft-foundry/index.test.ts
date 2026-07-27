@@ -1370,6 +1370,111 @@ describe("microsoft-foundry plugin", () => {
     expect(provider?.models[0]?.compat?.maxTokensField).toBe("max_tokens");
   });
 
+  it.each([
+    ["gpt-5.6", 1_050_000, undefined],
+    ["gpt-5.6-sol", 1_050_000, undefined],
+    ["gpt-5.6-terra", 1_050_000, undefined],
+    ["gpt-5.6-luna", 1_050_000, undefined],
+    ["gpt-5.5", 1_050_000, 922_000],
+    ["gpt-5.4", 1_050_000, undefined],
+    ["gpt-5.4-pro", 1_050_000, undefined],
+    ["gpt-5.4-mini", 400_000, undefined],
+    ["gpt-5.4-nano", 400_000, undefined],
+    ["gpt-5.3-codex", 400_000, undefined],
+    ["gpt-5.2", 400_000, undefined],
+    ["gpt-5.2-codex", 400_000, undefined],
+    ["gpt-5.1", 400_000, undefined],
+    ["gpt-5.1-codex", 400_000, undefined],
+    ["gpt-5.1-codex-mini", 400_000, undefined],
+    ["gpt-5.1-codex-max", 400_000, undefined],
+    ["gpt-5", 400_000, undefined],
+    ["gpt-5-mini", 400_000, undefined],
+    ["gpt-5-nano", 400_000, undefined],
+    ["gpt-5-codex", 400_000, undefined],
+    ["gpt-5-pro", 400_000, undefined],
+  ] as const)(
+    "uses documented Foundry GPT token limits for %s",
+    (modelNameHint, contextWindow, contextTokens) => {
+      const result = buildFoundryAuthResult({
+        profileId: "microsoft-foundry:default",
+        apiKey: "test-api-key",
+        endpoint: "https://example.services.ai.azure.com",
+        modelId: "custom-production-alias",
+        modelNameHint,
+        api: "openai-responses",
+        authMethod: "api-key",
+      });
+
+      const model = result.configPatch?.models?.providers?.["microsoft-foundry"]?.models[0];
+      expect(model).toMatchObject({
+        id: "custom-production-alias",
+        name: modelNameHint,
+        contextWindow,
+        maxTokens: 128_000,
+        params: { canonicalModelId: modelNameHint },
+      });
+      expect(model?.contextTokens).toBe(contextTokens);
+    },
+  );
+
+  it("keeps the GPT-5.5 Responses budget out of Foundry Chat Completions", () => {
+    const result = buildFoundryAuthResult({
+      profileId: "microsoft-foundry:default",
+      apiKey: "test-api-key",
+      endpoint: "https://example.services.ai.azure.com",
+      modelId: "custom-gpt55-chat-alias",
+      modelNameHint: "gpt-5.5",
+      api: "openai-completions",
+      authMethod: "api-key",
+    });
+
+    const model = result.configPatch?.models?.providers?.["microsoft-foundry"]?.models[0];
+    expect(model).toMatchObject({
+      contextWindow: 1_050_000,
+      maxTokens: 128_000,
+    });
+    expect(model?.contextTokens).toBeUndefined();
+  });
+
+  it.each(["gpt-chat-latest", "gpt-5.3-chat", "gpt-5.2-chat", "gpt-5.1-chat", "gpt-5-chat"])(
+    "keeps documented Foundry chat limits for %s",
+    (modelNameHint) => {
+      const result = buildFoundryAuthResult({
+        profileId: "microsoft-foundry:default",
+        apiKey: "test-api-key",
+        endpoint: "https://example.services.ai.azure.com",
+        modelId: "custom-chat-alias",
+        modelNameHint,
+        api: "openai-completions",
+        authMethod: "api-key",
+      });
+
+      expect(result.configPatch?.models?.providers?.["microsoft-foundry"]?.models[0]).toMatchObject(
+        {
+          contextWindow: 128_000,
+          maxTokens: 16_384,
+        },
+      );
+    },
+  );
+
+  it("keeps conservative token limits for unknown Foundry GPT model names", () => {
+    const result = buildFoundryAuthResult({
+      profileId: "microsoft-foundry:default",
+      apiKey: "test-api-key",
+      endpoint: "https://example.services.ai.azure.com",
+      modelId: "custom-unknown-alias",
+      modelNameHint: "gpt-6-unknown",
+      api: "openai-responses",
+      authMethod: "api-key",
+    });
+
+    expect(result.configPatch?.models?.providers?.["microsoft-foundry"]?.models[0]).toMatchObject({
+      contextWindow: 128_000,
+      maxTokens: 16_384,
+    });
+  });
+
   it("routes Claude deployments through Foundry Anthropic Messages", () => {
     const result = buildFoundryAuthResult({
       profileId: "microsoft-foundry:entra",
