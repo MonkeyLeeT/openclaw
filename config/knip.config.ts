@@ -122,6 +122,8 @@ const rootEntries = [
   "scripts/e2e/*.{js,mjs,ts}!",
   "scripts/e2e/lib/**/{assertions,probe,mock-server}.{js,mjs,ts}!",
   "src/audit/audit-event-writer.worker.ts!",
+  // Loaded by URL from the SQLite lifecycle archive owner.
+  "src/config/sessions/session-accessor.sqlite-archive.worker.ts!",
   "src/state/openclaw-database-verify.worker.ts!",
   "src/agents/model-provider-auth.worker.ts!",
   // Loaded by URL from setup-inference-detection.ts; no static import edge exists.
@@ -731,11 +733,8 @@ const config = {
       "media-understanding-provider.ts!",
       "model-route-contract.ts!",
       "native-web-search.ts!",
-      "openai-chatgpt-oauth-abort.runtime.ts!",
       "openai-chatgpt-oauth-flow.runtime.ts!",
-      "openai-chatgpt-oauth-types.runtime.ts!",
       "openai-chatgpt-oauth.runtime.ts!",
-      "openai-chatgpt-pkce.runtime.ts!",
       "openai-chatgpt-provider.runtime.ts!",
       "openai-provider.ts!",
       "prompt-overlay.ts!",
