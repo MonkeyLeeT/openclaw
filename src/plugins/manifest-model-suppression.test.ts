@@ -340,17 +340,32 @@ describe("manifest model suppression", () => {
     );
   });
 
-  it("keeps the OpenAI API route available while retiring the ChatGPT route", () => {
-    const manifestUrl = new URL("../../extensions/openai/openclaw.plugin.json", import.meta.url);
-    const manifest = JSON.parse(fs.readFileSync(manifestUrl, "utf8"));
+  it.each([
+    { id: "gpt-5.4", host: "chatgpt.com", successor: "gpt-5.6-terra" },
+    { id: "gpt-5-chat-latest", host: "api.openai.com", successor: "gpt-5.6-sol" },
+    { id: "gpt-5.1-codex-mini", host: "api.openai.com", successor: "gpt-5.6-terra" },
+    { id: "gpt-5.2-chat-latest", host: "api.openai.com", successor: "gpt-5.6-sol" },
+  ])("retires $id only on its declared OpenAI route", ({ id, host, successor }) => {
+    const manifest = JSON.parse(
+      fs.readFileSync(
+        new URL("../../extensions/openai/openclaw.plugin.json", import.meta.url),
+        "utf8",
+      ),
+    );
     setPlugins(manifest);
     const resolver = buildManifestBuiltInModelSuppressionResolver({ env: process.env });
-    const input = { provider: "openai", id: "gpt-5.4" };
-    expect(resolver({ ...input, baseUrl: "https://chatgpt.com/backend-api" })).toMatchObject({
-      retirement: { replacedBy: "gpt-5.6-terra" },
+    const input = { provider: "openai", id };
+    expect(resolver({ ...input, baseUrl: `https://${host}/v1` })).toMatchObject({
+      retirement: { replacedBy: successor },
     });
-    for (const baseUrl of [undefined, "https://api.openai.com/v1", "https://proxy.example/v1"]) {
+    const sibling = host === "api.openai.com" ? "chatgpt.com" : "api.openai.com";
+    for (const baseUrl of [undefined, `https://${sibling}/v1`, "https://proxy.example/v1"]) {
       expect(resolver({ ...input, baseUrl })).toBeUndefined();
+    }
+    for (const active of ["gpt-4.1-mini", "gpt-4o", "gpt-4.1-nano", "gpt-5.1"]) {
+      expect(
+        resolver({ provider: "openai", id: active, baseUrl: `https://${host}/v1` }),
+      ).toBeUndefined();
     }
   });
 

@@ -114,25 +114,25 @@ it("does not compare Decision selectors through conversational billing routes", 
 });
 
 it.each([
-  [false, "gpt-5.6-luna"],
-  [true, "gpt-5.4-mini"],
+  [false, "gpt-5.6-sol"],
+  [true, "gpt-5.6-sol"],
 ] as const)(
   "records inherited billing changes once (multiagent: %s)",
   async (multiagent, successor) => {
     await withDoctorConfigPreflightHome(async (home) => {
-      const { configPath } = await writeBillingFixture(home, "gpt-4o-mini", {
+      const { configPath } = await writeBillingFixture(home, "gpt-5-chat-latest", {
         defaults: {
-          ...billingDefaults("gpt-5.4", "gpt-4o-mini"),
-          subagents: { model: "openai/gpt-4o-mini" },
+          ...billingDefaults("gpt-5.6-sol", "gpt-5-chat-latest"),
+          subagents: { model: "openai/gpt-5-chat-latest" },
         },
         ...(multiagent ? { ownership: "explicit" } : {}),
         entries: multiagent
           ? {
               main: { heartbeat: {} },
               metered: {
-                heartbeat: { model: "openai/gpt-5.4" },
-                subagents: { model: "openai/gpt-5.4" },
-                models: { "openai/gpt-5.4": { agentRuntime: { id: "openclaw" } } },
+                heartbeat: { model: "openai/gpt-5.6-sol" },
+                subagents: { model: "openai/gpt-5.6-sol" },
+                models: { "openai/gpt-5.6-sol": { agentRuntime: { id: "openclaw" } } },
               },
             }
           : { main: {} },
@@ -140,7 +140,7 @@ it.each([
       {
         await using ctx = await prepareDoctorContext(configPath);
         await runWriteConfigHealth(ctx, { runPostWriteRepairs: false });
-        const expectedRoute = `openai/gpt-4o-mini via metered API-key profile openai:default -> openai/${successor} via subscription/OAuth profile openai:chatgpt-default.`;
+        const expectedRoute = `openai/gpt-5-chat-latest via metered API-key profile openai:default -> openai/${successor} via subscription/OAuth profile openai:chatgpt-default.`;
         expect(ctx.updateWarnings).toEqual(
           ["heartbeat", "subagents"].map((owner) =>
             expect.stringContaining(
